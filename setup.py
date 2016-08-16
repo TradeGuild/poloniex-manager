@@ -8,8 +8,8 @@ classifiers = [
 
 setup(
     name='poloniex-manager',
-    version='0.0.1',
-    py_modules=['poloniex_manager'],
+    version='0.0.9',
+    py_modules=['poloniex_manager', 'poloniex_listener'],
     url='https://github.com/gitguild/poloniex-manager',
     license='MIT',
     classifiers=classifiers,
@@ -23,5 +23,10 @@ setup(
         'tapp-config>=0.0.2',
         'tappmq', 'requests',
     ],
-    tests_require=['pytest', 'pytest-cov']
+    tests_require=['pytest', 'pytest-cov'],
+    entry_points="""
+[console_scripts]
+poloniexm = poloniex_manager:main
+poloniexl = poloniex_listener:main
+"""
 )
