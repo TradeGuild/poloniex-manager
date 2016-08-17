@@ -12,7 +12,7 @@ red = setup_redis()
 
 channels = {}
 poloniex = Poloniex()
-logger = setup_logging('poloniex_listener', poloniex.cfg)
+logger = setup_logging('poloniex_listener', prefix="trademanager", cfg=poloniex.cfg)
 poloniex.setup_connections()
 poloniex.setup_logger()  # will be actually use the logger above
 
