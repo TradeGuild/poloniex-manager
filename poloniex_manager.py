@@ -3,23 +3,15 @@ Plugin for managing a Poloniex account.
 This module can be imported by trade_manager and used like a plugin.
 """
 import datetime
+import hashlib
 import hmac
 import json
 import time
 import urllib
-from requests import Timeout
-
-from ledger import Amount
-from ledger import Balance
-
+from ledger import Amount, Balance
+from requests import Timeout, get, post
 from requests.packages.urllib3.connection import ConnectionError
-
 from sqlalchemy_models import jsonify2
-from sqlalchemy_models.util import filter_query_by_attr
-
-import hashlib
-import requests
-
 from trade_manager import em, wm
 from trade_manager.plugin import ExchangePluginBase, get_order_by_order_id, submit_order, get_orders
 
@@ -47,7 +39,7 @@ class Poloniex(ExchangePluginBase):
         }
         # self.logger.debug('sending to %s\nheaders: %s\ndata: %s' % (privUrl, headers, params))
         try:
-            response = json.loads(requests.post(url=privUrl, data=params,
+            response = json.loads(post(url=privUrl, data=params,
                                   headers=headers, timeout=REQ_TIMEOUT).text)
         except (ConnectionError, Timeout, ValueError) as e:
             self.logger.exception(e)
@@ -61,7 +53,7 @@ class Poloniex(ExchangePluginBase):
         if 'currencyPair' in params:
             method += '&currencyPair=' + str(params['currencyPair'])
         try:
-            ret = requests.get(baseUrl + method, timeout=REQ_TIMEOUT)
+            ret = get(baseUrl + method, timeout=REQ_TIMEOUT)
         except (ConnectionError, Timeout) as e:
             self.logger.exception(e)
         return json.loads(ret.text)
@@ -165,7 +157,7 @@ class Poloniex(ExchangePluginBase):
             available = available + aamount
             total = total + aamount + Amount("{0:.8f} {1}".format(float(data[comm]['onOrders']), commodity))
         self.logger.debug("total balance: %s" % total)
-        self.logger.debug("available balance: %s" % available)
+        self.logger.info("available balance: %s" % available)
         bals = {}
         for amount in total:
             comm = str(amount.commodity)
@@ -177,8 +169,8 @@ class Poloniex(ExchangePluginBase):
                 self.session.add(bals[comm])
             else:
                 bals[comm].load_commodities()
-                bals[comm].total = amount
-                bals[comm].available = available.commodity_amount(amount.commodity)
+                bals[comm].total = amount or Amount("0 %s" % amount.commodity)
+                bals[comm].available = available.commodity_amount(amount.commodity) or Amount("0 %s" % amount.commodity)
         try:
             self.session.commit()
         except Exception as e:
@@ -219,7 +211,7 @@ class Poloniex(ExchangePluginBase):
                 self.session.rollback()
                 self.session.flush()
 
-    def cancel_orders(self, market=None, side=None, oid=None, order_id=None):
+    def cancel_orders(self, oid=None, order_id=None, market=None, side=None, price=None):
         if oid is not None or order_id is not None:
             order = self.session.query(em.LimitOrder)
             if oid is not None:
@@ -235,6 +227,11 @@ class Poloniex(ExchangePluginBase):
                     continue
                 if side is not None and side != o.side:
                     continue
+                if price is not None:
+                    if o.side == 'bid' and o.price < price:
+                        continue
+                    elif o.side == 'ask' and o.price > price:
+                        continue
                 self.cancel_order(order=o)
 
     def create_order(self, oid, expire=None):
